@@ -13,6 +13,7 @@ const restartDelay = 240000;
 const processRestartDelay = 30000;
 
 let useProxy;
+let proxies = [];
 
 const banner = `
  █████╗ ██╗██████╗ ██████╗ ██████╗  ██████╗ ██████╗      █████╗ ███████╗ ██████╗
@@ -33,21 +34,23 @@ const displayHeader = () => {
   console.log(chalk.yellow(banner)); // Display the banner in yellow
 };
 
-const askAccountType = async () => {
-  const answers = await inquirer.prompt([
-    {
-      type: "list",
-      name: "accountType",
-      message: "How many accounts would you like to use?",
-      choices: ["Single Account", "Multiple Accounts"],
-    },
-  ]);
-
-  console.log("");
-  return answers.accountType;
+const loadProxiesFromFile = async (filePath) => {
+  try {
+    const data = await fs.readFile(filePath, "utf-8");
+    proxies = data
+      .split("\n")
+      .map((line) => line.trim())
+      .filter((line) => line);
+    console.log(
+      chalk.green(`Loaded ${proxies.length} proxies from ${filePath}`)
+    );
+  } catch (error) {
+    console.error(
+      chalk.red(`Failed to load proxies from file: ${error.message}`)
+    );
+  }
 };
 
-// Function to ask about proxy usage
 const askProxyMode = async () => {
   const answers = await inquirer.prompt([
     {
@@ -259,7 +262,7 @@ const processNode = async (node, agent, ipAddress, authToken) => {
         nodeIntervals.set(node.nodeId, intervalId);
       }
 
-      break; // Exit the loop if processing is successful
+      break;
     } catch (error) {
       console.error(
         chalk.red(
@@ -281,17 +284,24 @@ const runAll = async (initialRun = true) => {
   try {
     if (initialRun) {
       await displayHeader();
-      useProxy = await askProxyMode(); // Use inquirer instead of prompt-sync
+      useProxy = await askProxyMode();
+      if (useProxy) {
+        await loadProxiesFromFile("proxy.txt");
+      }
     }
 
     const fetch = await import("node-fetch").then((module) => module.default);
 
     for (const user of Config) {
       for (const node of user.nodes) {
-        const agent = useProxy ? new HttpsProxyAgent(node.proxy) : null;
-        const ipAddress = useProxy ? await fetchIpAddress(fetch, agent) : null;
+        for (const proxy of proxies) {
+          const agent = useProxy ? new HttpsProxyAgent(proxy) : null;
+          const ipAddress = useProxy
+            ? await fetchIpAddress(fetch, agent)
+            : null;
 
-        processNode(node, agent, ipAddress, user.usertoken);
+          await processNode(node, agent, ipAddress, user.usertoken);
+        }
       }
     }
   } catch (error) {

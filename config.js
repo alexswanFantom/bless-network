@@ -5,7 +5,6 @@ export const Config = [
       {
         nodeId: "12D3KooWNrA....",
         hardwareId: "f239b6c8b9b4956....",
-        proxy: "proxy1",
       },
     ],
   },
